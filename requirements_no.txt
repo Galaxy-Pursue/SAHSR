@@ -1,0 +1,22 @@
+# This file may be used to create an environment using:
+# $ conda create --name <env> --file <this file>
+# platform: linux-64
+argparse
+cudatoolkit
+matplotlib
+numpy
+numpy-base
+opencv-python
+packaging
+pillow
+python
+pytorch-ignite
+pywavelets
+pyyaml
+six
+torch
+torchcrf
+torchvision
+tqdm
+yacs
+yaml
