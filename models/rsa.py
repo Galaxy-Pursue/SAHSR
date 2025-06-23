@@ -163,9 +163,9 @@ class BiLSTM(nn.Module):
             return out, torch.zeros(()).cuda()
 
 
-class PyramidPooling6(nn.Module):
+class RecurrentSemanticAggregration(nn.Module):
     def __init__(self, h_split=3, w_split=2, channel=2048, mode='avg', learnable=False, p=1.0, fn=None, moda_type='increase', rsa_model='bilstm'):
-        super(PyramidPooling6, self).__init__()
+        super(RecurrentSemanticAggregration, self).__init__()
         self.h_split = h_split
         self.w_split = w_split
         self.channel = channel
@@ -195,27 +195,23 @@ class PyramidPooling6(nn.Module):
     def forward(self, x, sub, labels):
         b, c, _, _ = x.shape
         if self.mode == 'max' or self.mode == 'avg':
-            x_height = self.height_pool(x).view(b, c, -1).transpose(1, 2)
-            x_width = self.width_pool(x).view(b, c, -1).transpose(1, 2)
             x_patch = self.patch_pool(x).view(b, c, -1).transpose(1, 2)
             x_global = self.global_pool(x).view(b, c, -1).transpose(1, 2)
         else:
             p = F.relu(self.p) + 1
-            x_height = self.height_pool(x, p).view(b, c, -1).transpose(1, 2)
-            x_width = self.width_pool(x, p).view(b, c, -1).transpose(1, 2)
             x_patch = self.patch_pool(x, p).view(b, c, -1).transpose(1, 2)
             x_global = self.global_pool(x).view(b, c, -1).transpose(1, 2)
         # x_now = torch.cat((x_global, x_height, x_width, x_patch), dim=1)
-        x_conclu, loss_tgsa = self.rnn_conclu(x_patch, sub, labels)
+        x_conclu, loss_moda = self.rnn_conclu(x_patch, sub, labels)
         res = torch.cat((x_global.squeeze(1), x_conclu), dim=1)
-        return res, loss_tgsa, x_patch.reshape(b, -1)
+        return res, loss_moda, x_patch.reshape(b, -1)
 
 
 
 if __name__ == "__main__":
     x = torch.randn(123, 2048, 18, 9)
 
-    pp = PyramidPooling5(h_split=3, w_split=2, mode='oth', learnable=True)
+    pp = RecurrentSemanticAggregration(h_split=3, w_split=2, mode='oth', learnable=True)
 
     y = pp(x)
     print(y.shape)

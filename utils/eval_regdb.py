@@ -4,7 +4,6 @@ import numpy as np
 import torch
 from sklearn.preprocessing import normalize
 from torch.nn import functional as F
-from models.AIM import AIM
 from utils.rerank import re_ranking
 
 def pairwise_distance(query_features, gallery_features):
@@ -97,37 +96,7 @@ def get_mAP(sorted_indices, query_ids, query_cam_ids, gallery_ids, gallery_cam_i
     return mAP
 
 
-def eval_regdb(query_feats, query_ids, query_cam_ids, gallery_feats, gallery_ids, gallery_cam_ids, gallery_img_paths, k1=8, k2=2, aim=False):
-    gallery_feats = F.normalize(gallery_feats, dim=1)
-    query_feats = F.normalize(query_feats, dim=1)
-
-    if aim:
-        dist_mat = AIM(query_feats, gallery_feats, k1, k2)
-    else:
-        dist_mat = pairwise_distance(query_feats, gallery_feats)
-
-    sorted_indices = np.argsort(dist_mat, axis=1)
-
-    mAP = get_mAP(sorted_indices, query_ids, query_cam_ids, gallery_ids, gallery_cam_ids)
-    cmc = get_cmc(sorted_indices, query_ids, query_cam_ids, gallery_ids, gallery_cam_ids)
-
-    r1 = cmc[0]
-    r5 = cmc[4]
-    r10 = cmc[9]
-    r20 = cmc[19]
-
-    r1 = r1 * 100
-    r5 = r5 * 100
-    r10 = r10 * 100
-    r20 = r20 * 100
-    mAP = mAP * 100
-
-    perf = 'r1 precision = {:.2f} , r10 precision = {:.2f} , r20 precision = {:.2f}, mAP = {:.2f}'
-    logging.info(perf.format(r1, r10, r20, mAP))
-
-    return mAP, r1, r5, r10, r20
-
-def eval_regdb2(query_feats, query_ids, query_cam_ids, gallery_feats, gallery_ids, gallery_cam_ids, gallery_img_paths, rerank=False):
+def eval_regdb(query_feats, query_ids, query_cam_ids, gallery_feats, gallery_ids, gallery_cam_ids, gallery_img_paths, rerank=True):
     # gallery_feats = F.normalize(gallery_feats, dim=1)
     # query_feats = F.normalize(query_feats, dim=1)
 

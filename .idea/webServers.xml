@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="3936cacb-4533-4643-9579-0df01246fef5" name="thusz_4090_new">
+        <fileTransfer accessType="SFTP" host="10.103.10.88" port="22" sshConfigId="e8ae7567-fffb-4b35-9568-f23b5f2e1392" sshConfig="nitron@10.103.10.88:22 password">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" keepAliveTimeout="0" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>

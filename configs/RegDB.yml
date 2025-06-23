@@ -1,10 +1,10 @@
-prefix: RegDB
+prefix: RegDB_sota
 
 fp16: true
 rerank: false
 
 # dataset
-sample_method: identity_random
+sample_method: camera_random # identity_random
 image_size: (288, 144)
 p_size: 10
 k_size: 10
@@ -47,5 +47,5 @@ padding: 10
 
 # log
 log_period: 20
-start_eval: 115
-eval_interval: 5
+start_eval: 100
+eval_interval: 2

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="SshConfigs">
+    <configs>
+      <sshConfig authType="PASSWORD" connectionConfig="{&quot;proxyParams&quot;:{&quot;proxyHost&quot;:&quot;127.0.0.1&quot;,&quot;proxyPort&quot;:1080,&quot;proxyType&quot;:&quot;SOCKS&quot;}}" host="10.103.10.88" id="e8ae7567-fffb-4b35-9568-f23b5f2e1392" port="22" nameFormat="DESCRIPTIVE" username="nitron" useOpenSSHConfig="true" />
+    </configs>
+  </component>
+</project>

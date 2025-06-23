@@ -9,7 +9,7 @@ from utils.calc_acc import calc_acc
 from torch.nn import functional as F
 
 
-def create_train_engine(model, optimizer, optimizer_extra=None, non_blocking=False, p=12, top_k=4, extra_img_num=2):
+def create_train_engine(model, optimizer, non_blocking=False, p=12):
     device = torch.device("cuda", torch.cuda.current_device())
     scaler = torch.cuda.amp.GradScaler()
     # scaler_extra = torch.cuda.amp.GradScaler()
@@ -41,9 +41,9 @@ def create_train_engine(model, optimizer, optimizer_extra=None, non_blocking=Fal
                                     cam_ids=cam_ids,
                                     epoch=epoch, extra_train=extra_train)
 
-        # 在常规训练时，需要计算centerlogits以备extra_train采样使用
+        # During normal training，we need to calculate centerlogits for extra_train sampling
         if extra_train == False:
-            # 算一下每个id对应的平均logits，找到平均置信度最高的拿出去进行额外训练
+            # calculate mean logits of every id, finding the ones with highest confidence
             n = logits.size()[0]
             k = n // p
             # Come to centers
@@ -57,49 +57,9 @@ def create_train_engine(model, optimizer, optimizer_extra=None, non_blocking=Fal
             scaler.update()
 
 
-        # 当在extra_train时，采用一个新的loss
+        # use group loss for extra_train
         else:
             center_logits = None
-            # # 在extra_train中，batch一共被分为p组，每组top_k个人，每个人extra_img_num张图像
-            # # 前面半个batch是p组，每组top_k个人，每个人extra_img_num张ir图；
-            # # 后面半个batch是p组，每组top_k个人，每个人extra_img_num张rgb图；
-            # n = logits.size()[0]
-            # loss_extra = torch.tensor(0.0, device=device, requires_grad=False)
-            # img_num = top_k*extra_img_num//2
-            #
-            # # 切分批次数据
-            # ir_logits = logits[:n // 2].reshape(p, img_num, -1)
-            # rgb_logits = logits[n // 2:].reshape(p, img_num, -1)
-            # ir_labels = labels[:n // 2].reshape(p, img_num)
-            # rgb_labels = labels[n // 2:].reshape(p, img_num)
-            # # logits:[p, img_num, c]  labels:[p, img_num]
-            # logits = torch.cat([ir_logits, rgb_logits], dim=1)
-            # labels = torch.cat([ir_labels, rgb_labels], dim=1)
-            #
-            # for person_id in range(p):
-            #     group_logits = logits[person_id]
-            #     group_labels = labels[person_id]
-            #
-            #     # 找到 group_labels 中的 k 个不同类别
-            #     unique_group_labels = torch.unique(group_labels)
-            #
-            #     # 创建映射字典，将原始类别映射到 0~k-1 的范围内
-            #     label_to_index = {lab.item(): idx for idx, lab in enumerate(unique_group_labels)}
-            #
-            #     # 创建新的 labels 向量
-            #     group_labels_new = torch.tensor([label_to_index[lab.item()] for lab in group_labels], dtype=torch.long, device=device)
-            #
-            #     # 通过高级索引提取 logits 中对应的元素
-            #     indices = unique_group_labels.unsqueeze(0).expand(group_logits.size(0), -1)
-            #     group_logits_new = torch.gather(group_logits, 1, indices)
-            #
-            #     # 计算交叉熵损失
-            #     loss_extra += F.cross_entropy(group_logits_new, group_labels_new)
-            # loss_extra = F.cross_entropy(logits.float(), labels)
-
-            # scaler_extra.scale(loss).backward()
-            # scaler_extra.step(optimizer_extra)
-            # scaler_extra.update()
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
@@ -110,8 +70,6 @@ def create_train_engine(model, optimizer, optimizer_extra=None, non_blocking=Fal
     @engine.on(Events.STARTED)
     def initialize_state(engine):
         engine.state.process_func = _process_func
-        # 记录engine是在算常规训练还是额外训练，从而加快训练速度
-        # engine.state.normal_iter = True
 
     return engine
 

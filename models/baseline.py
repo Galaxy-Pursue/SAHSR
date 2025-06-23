@@ -1,27 +1,15 @@
 import torch
-import torch.nn as nn 
-from torch.nn import init
+import torch.nn as nn
 from torch.nn import functional as F
-from torch.nn import Parameter
-import numpy as np
 
-from models.ModaLoss3 import ModaReduceLoss
-
-from models.infoNCE import centerNCE
-
-
-from models.ppool6 import PyramidPooling6
+from models.ModalityAlignmentLoss import ModaReduceLoss
+from models.rsa import RecurrentSemanticAggregration
 from models.SEM import GradientComputation
-from models.tgsa import cal_tgsa
-from models.OTLoss import OTLoss
 from models.extra_train_loss import group_loss
 from models.resnet import resnet50, resnet18
-
 from models.layers import CSLoss
-from models.layers.loss.cs_loss2 import CSLoss2
-
 from models.layers import DualBNNeck
-# from layers.module.part_pooling import TransformerPool, SAFL
+
 
 class embed_net(nn.Module):
     def __init__(self, backbone, pretrained, drop_last_stride, modality_attention, **kwargs):
@@ -100,7 +88,7 @@ class Baseline(nn.Module):
         self.pattern_attention = pattern_attention
         self.modality_attention = modality_attention
         self.mutual_learning = mutual_learning
-        self.LUP_pretrained = kwargs.get('LUP_pretrained', False)
+
         self.moda_type = kwargs.get('moda_type', 'increase')
         self.rsa_model = kwargs.get('rsa_model', 'bilstm')
 
@@ -109,12 +97,8 @@ class Baseline(nn.Module):
         self.top_k = kwargs.get('top_k', 4)
         self.extra_img_num = kwargs.get('extra_img_num', 2)
         self.part_num = 1  # 11 # kwargs.get('num_parts', 7)
-        self.dp = kwargs.get('dp', "l2")
-        self.dp_w = kwargs.get('dp_w', 0.5)
-        self.pc_w = kwargs.get('pc_w', 0)
+        self.ma_w = kwargs.get('ma_w', 0)
         self.cs_w = kwargs.get('cs_w', 1.0)
-        self.group_inforce_w = kwargs.get('group_inforce_w', 0.0)
-        print(f'group_inforce_w:{self.group_inforce_w}')
         self.group_cs_w = kwargs.get('group_cs_w', 0.0)
         print(f'group_cs_w:{self.group_cs_w}')
         self.group_ce_w = kwargs.get('group_ce_w', 0.0)
@@ -122,31 +106,24 @@ class Baseline(nn.Module):
         self.margin1 = kwargs.get('margin1', 0.01)
         self.margin2 = kwargs.get('margin2', 0.7)
 
-        self.use_rsc = kwargs.get('use_rsc', 1)
+        self.use_rsa = kwargs.get('use_rsa', 1)
 
 
-        if self.use_rsc == 1:
-            self.ban_ppool = False
+        if self.use_rsa:
+            print(f'use_rsa:{self.use_rsa}\n')
 
-        else:
-            self.ban_ppool = True
-        print(f'ban_ppool:{self.ban_ppool}')
-
-        # self.ban_ppool = kwargs.get('ban_ppool', False)
         
         self.backbone = embed_net(backbone, True, drop_last_stride, modality_attention)
         D = self.backbone.D 
         self.base_dim = D
         self.dim = D
         
-        if self.ban_ppool:
+        if not self.use_rsa:
             self.part_num = 6
         else:
-            print('Intializing PyramidPooling6')
-            # self.ppool = PyramidPooling2()
-            # self.cs_loss_fn_in = CSLoss(k_size=self.k_size, margin1=self.margin1, margin2=self.margin2)
+            print('Intializing RSA!')
             self.moda_loss_fn = ModaReduceLoss()
-            self.ppool = PyramidPooling6(fn = self.moda_loss_fn, mode='avg', moda_type=self.moda_type, rsa_model=self.rsa_model)
+            self.rsa = RecurrentSemanticAggregration(fn = self.moda_loss_fn, mode='avg', moda_type=self.moda_type, rsa_model=self.rsa_model)
         self.bn_neck = DualBNNeck(self.base_dim + self.dim * self.part_num)
         
         self.visible_classifier = nn.Linear(self.base_dim + self.dim * self.part_num, num_classes, bias=False)
@@ -159,7 +136,7 @@ class Baseline(nn.Module):
         self.infrared_classifier_.weight.data = self.infrared_classifier.weight.data
         
         self.KL_loss_fn = nn.KLDivLoss(reduction='batchmean')
-        self.OT_loss_fn = OTLoss()
+
         self.weight_KL = kwargs.get('weight_KL', 2.0)
         self.update_rate = kwargs.get('update_rate', 0.2)
         self.update_rate_ = self.update_rate
@@ -169,15 +146,12 @@ class Baseline(nn.Module):
         self.cs_loss_fn = CSLoss(k_size=self.k_size, margin1=self.margin1, margin2=self.margin2) # 0.01 # 0.7
 
         self.group_ce_fn = group_loss(self.top_k, self.extra_img_num, self.p_size, 'ce')
-        self.group_inforce_fn = group_loss(self.top_k, self.extra_img_num, self.p_size, 'inforce')
+        # self.group_inforce_fn = group_loss(self.top_k, self.extra_img_num, self.p_size, 'inforce')
         self.group_cs_fn = group_loss(self.top_k, self.extra_img_num, self.p_size, 'cs', margin1=self.margin1, margin2=self.margin2)
 
-        self.inforce_w = kwargs.get('inforce_w', 0.0)
-        print(f'inforce_w:{self.inforce_w}')
-        self.inforce_loss_fn = centerNCE(num_instance = self.k_size)
+
         
     def forward(self, inputs, labels=None, mode=None, extra_train=False, **kwargs):
-        # 此时前一半为inf，后一半为vis
         cam_ids = kwargs.get("cam_ids")
         sub = (cam_ids == 3) + (cam_ids == 6)
         
@@ -185,13 +159,13 @@ class Baseline(nn.Module):
         
         b, c, w, h = global_feat.shape
 
-        if self.ban_ppool:
+        if not self.use_rsa:
             part_feat = F.adaptive_avg_pool2d(global_feat, (3, 2)).view(b, -1)
             global_feat = global_feat.mean(dim=(2, 3))
             feats = torch.cat([global_feat, part_feat], dim=1)
-            loss_pc = torch.tensor(0.0, requires_grad=False).cuda()
+            loss_ma = torch.tensor(0.0, requires_grad=False).cuda()
         else:
-            feats, loss_pc, x_patch = self.ppool(global_feat, sub, labels)
+            feats, loss_ma, x_patch = self.rsa(global_feat, sub, labels)
 
         if not self.training:
             feats = self.bn_neck(feats, sub)
@@ -199,15 +173,14 @@ class Baseline(nn.Module):
         else:
             pass
 
-            return self.train_forward(feats, labels, sub, loss_pc, extra_train, **kwargs)
+            return self.train_forward(feats, labels, sub, loss_ma, extra_train, **kwargs)
 
-    def train_forward(self, feat, labels, sub, loss_pc, extra_train=False, **kwargs):
+    def train_forward(self, feat, labels, sub, loss_ma, extra_train=False, **kwargs):
         metric = {}
 
-        loss_cs, pc, ori_an = self.cs_loss_fn(feat.float(), labels)
-        loss_inforce = self.inforce_loss_fn(feat.float(),labels)
+        loss_cs, _, _ = self.cs_loss_fn(feat.float(), labels)
+
         if extra_train == True:
-            loss_inforce_group = self.group_inforce_fn(feat.float(), labels)
             loss_cs_group = self.group_cs_fn(feat.float(), labels)
 
         
@@ -246,19 +219,13 @@ class Baseline(nn.Module):
 
         metric.update({'id': loss_id.data})
         metric.update({'cs': loss_cs.data})
-        metric.update({'pc': loss_pc.data})
-        metric.update({'cs_pc': pc.data})
-        metric.update({'cs_ori_an': ori_an.data})
+        metric.update({'ma': loss_ma.data})
 
-        if self.inforce_w > 1e-7:
-            metric.update({'inforce': loss_inforce.data})
+        loss = loss_id + loss_cs * self.cs_w + loss_ma * self.ma_w
 
-        loss = loss_id + loss_cs * self.cs_w + loss_pc * self.pc_w
-        if self.inforce_w > 1e-7:
-            loss = loss + self.inforce_w * loss_inforce
         if extra_train == False:
             pass
         else:
-            loss = loss + self.group_ce_w * loss_ce_group * 0.001 + self.group_cs_w * loss_cs_group * 0.001
+            loss = loss + self.group_ce_w * loss_ce_group + self.group_cs_w * loss_cs_group
 
         return loss, metric, logits

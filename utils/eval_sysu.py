@@ -2,7 +2,6 @@ import os
 import logging
 import torch
 import numpy as np
-from models.AIM import AIM
 from torch.nn import functional as F
 
 from utils.rerank import re_ranking
@@ -99,64 +98,7 @@ def get_mAP(sorted_indices, query_ids, query_cam_ids, gallery_ids, gallery_cam_i
 
 
 def eval_sysu(query_feats, query_ids, query_cam_ids, gallery_feats, gallery_ids, gallery_cam_ids, gallery_img_paths,
-              perm, mode='all', num_shots=1, num_trials=10, aim=True, k1=30, k2=6):
-    assert mode in ['indoor', 'all']
-
-    gallery_cams = [1, 2] if mode == 'indoor' else [1, 2, 4, 5]
-
-    # cam2 and cam3 are in the same location
-    query_cam_ids[np.equal(query_cam_ids, 3)] = 2
-    query_feats = F.normalize(query_feats, dim=1)
-
-    gallery_indices = np.in1d(gallery_cam_ids, gallery_cams)
-    
-    gallery_feats = gallery_feats[gallery_indices]
-    gallery_feats = F.normalize(gallery_feats, dim=1)
-    gallery_cam_ids = gallery_cam_ids[gallery_indices]
-    gallery_ids = gallery_ids[gallery_indices]
-    gallery_img_paths = gallery_img_paths[gallery_indices]
-    gallery_names = np.array(['/'.join(os.path.splitext(path)[0].split('/')[-3:]) for path in gallery_img_paths])
-
-    gallery_id_set = np.unique(gallery_ids)
-
-    mAP, r1, r5, r10, r20 = 0, 0, 0, 0, 0
-    for t in range(num_trials):
-        names = get_gallery_names(perm, gallery_cams, gallery_id_set, t, num_shots)
-        flag = np.in1d(gallery_names, names)
-
-        g_feat = gallery_feats[flag]
-        g_ids = gallery_ids[flag]
-        g_cam_ids = gallery_cam_ids[flag]
-
-        if aim:
-            dist_mat = AIM(query_feats, g_feat, k1=k1, k2=k2)
-        else:
-            dist_mat = pairwise_distance(query_feats, g_feat)
-
-        sorted_indices = np.argsort(dist_mat, axis=1)
-
-        mAP += get_mAP(sorted_indices, query_ids, query_cam_ids, g_ids, g_cam_ids)
-        cmc = get_cmc(sorted_indices, query_ids, query_cam_ids, g_ids, g_cam_ids)
-
-        r1 += cmc[0]
-        r5 += cmc[4]
-        r10 += cmc[9]
-        r20 += cmc[19]
-
-    r1 = r1 / num_trials * 100
-    r5 = r5 / num_trials * 100
-    r10 = r10 / num_trials * 100
-    r20 = r20 / num_trials * 100
-    mAP = mAP / num_trials * 100
-
-    perf = '{} num-shot:{} r1 precision = {:.2f} , r10 precision = {:.2f} , r20 precision = {:.2f}, mAP = {:.2f}'
-    logging.info(perf.format(mode, num_shots, r1, r10, r20, mAP))
-
-    return mAP, r1, r5, r10, r20
-
-
-def eval_sysu2(query_feats, query_ids, query_cam_ids, gallery_feats, gallery_ids, gallery_cam_ids, gallery_img_paths,
-              perm, mode='all', num_shots=1, num_trials=10, rerank=False):
+              perm, mode='all', num_shots=1, num_trials=10, rerank=True):
     assert mode in ['indoor', 'all']
 
     gallery_cams = [1, 2] if mode == 'indoor' else [1, 2, 4, 5]

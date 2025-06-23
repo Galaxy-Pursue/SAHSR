@@ -13,10 +13,9 @@ import torch
 import yaml
 
 from data import get_train_loader
-from models.model_base8.baseline import Baseline
+from models.baseline import Baseline
 import warnings
 
-# 忽略所有警告
 warnings.filterwarnings("ignore")
 
 
@@ -133,10 +132,9 @@ def train(cfg):
     plt.rcParams["font.size"] = 16  # Set font size
     plt.xticks([])
     plt.yticks([])
-    # 获取当前轴对象
+
     ax = plt.gca()
 
-    # 设置边框的粗细
     for spine in ax.spines.values():
         spine.set_linewidth(2)  # 这里的2是边框的粗细，可以根据需要调整
 
@@ -171,45 +169,25 @@ if __name__ == '__main__':
     parser.add_argument("--cfg", type=str, default="configs/SYSU.yml")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--exp_name", type=str, default="sysu_test")
-    parser.add_argument("--device", type=str, default="0")
+    parser.add_argument("--device", type=str, default="1")
     parser.add_argument("--backbone", type=str, default="resnet50")
     parser.add_argument("--update_rate", type=float, default=0.02)
     parser.add_argument("--num_parts", type=int, default=7)
     parser.add_argument("--margin1", type=float, default=0.01)
     parser.add_argument("--margin2", type=float, default=0.7)
-    parser.add_argument("--dp", type=str, default="l2")
-    # dp_w: 0.3
-    parser.add_argument("--dp_w", type=float, default=0.5)
-    parser.add_argument("--pc_w", type=float, default=0.0)
+    parser.add_argument("--ma_w", type=float, default=0.2)
     parser.add_argument("--cs_w", type=float, default=1)
-    parser.add_argument("--inforce_w", type=float, default=0.0)
-    parser.add_argument("--inforce_type", type=str, default='original')
-    parser.add_argument("--group_ce_w", type=float, default=0.0)
-    parser.add_argument("--group_inforce_w", type=float, default=0.0)
-    parser.add_argument("--group_cs_w", type=float, default=0.0)
-    parser.add_argument("--cs_type", type=str, default='original')
+    parser.add_argument("--group_ce_w", type=float, default=1.0)
+    parser.add_argument("--group_cs_w", type=float, default=1.0)
     parser.add_argument("--up_margin", type=float, default=1.0)
     parser.add_argument("--down_margin", type=float, default=-1.0)
     parser.add_argument("--top_k", type=int, default=4)
     parser.add_argument("--extra_img_num", type=int, default=2)
-    parser.add_argument("--extra_start_epoch", type=int, default=20000)
-    parser.add_argument("--lr_extra", type=float, default=0.00005)
-    parser.add_argument("--use_stn", type=int, default=0)
-    parser.add_argument("--use_rsc", type=int, default=1)
+    parser.add_argument("--extra_start_epoch", type=int, default=40)
+    parser.add_argument("--use_rsa", action='store_true')
     parser.add_argument("--sample_method", type=str, default="camera_random")
     parser.add_argument("--moda_type", type=str, default="increase")
-    # 一个很坑的东西，向parser中传bool类型，当type为bool时不能用True或False
-    # 在Python中，bool()函数会将非空字符串转换为True。在你的命令行参数中，--use_ada False被解析为字符串"False"，然后bool("False")返回True，这就是为什么args.use_ada的值为True。
-    # 下面两个是错误的传参方法
-    # parser.add_argument("--cs_projection", type=bool, default=False)
-    # parser.add_argument("--use_ada", type=bool, default=False)
-
-    # 要向parser中传入true或false，需要使用action='store_true'或action='store_false'，且命令行的输入也要做相应的修改
-    # 如果命令行中包含--use_ada，那么args.use_ada就会被设置为True，否则为False。
-    parser.add_argument("--use_ada", action='store_true')
-    parser.add_argument("--use_SEM", action='store_true')
-    parser.add_argument("--LUP_pretrained", action='store_true')
-    parser.add_argument("--cs_projection", action='store_true')
+    parser.add_argument("--rsa_model", type=str, default="bilstm")
 
     parser.add_argument("--file_prefix", type=str, default="./logs/")
     # for continue training
@@ -256,31 +234,25 @@ if __name__ == '__main__':
     cfg.num_parts = args.num_parts
     cfg.margin1 = args.margin1
     cfg.margin2 = args.margin2
-    cfg.dp = args.dp
-    cfg.dp_w = args.dp_w
     cfg.cs_w = args.cs_w
-    ## 下面是新加入的参数
-    cfg.inforce_w = args.inforce_w
-    cfg.inforce_type = args.inforce_type
-    cfg.cs_type = args.cs_type
-    cfg.use_ada = args.use_ada
+    ## These are new added parameters
     cfg.up_margin = args.up_margin
     cfg.down_margin = args.down_margin
     cfg.top_k = args.top_k
     cfg.extra_img_num = args.extra_img_num
     cfg.extra_start_epoch = args.extra_start_epoch
-    cfg.lr_extra = args.lr_extra
-    cfg.group_inforce_w = args.group_inforce_w
     cfg.group_cs_w = args.group_cs_w
     cfg.group_ce_w = args.group_ce_w
-    cfg.pc_w = args.pc_w
-    cfg.use_stn = args.use_stn
-    cfg.use_rsc = args.use_rsc
+    cfg.ma_w = args.ma_w
+    cfg.use_rsa = args.use_rsa
     cfg.sample_method = args.sample_method
-    cfg.use_SEM = args.use_SEM
-    cfg.LUP_pretrained = args.LUP_pretrained
     cfg.moda_type = args.moda_type
+    cfg.rsa_model = args.rsa_model
 
     cfg.file_prefix = args.file_prefix
+    # cfg.resume = args.resume
+    cfg.start_train_epoch = args.start_train_epoch
+    if cfg.resume: cfg.num_epoch = args.train_epoch
+    cfg.freeze()
 
     train(cfg)

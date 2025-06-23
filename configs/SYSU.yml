@@ -39,9 +39,6 @@ optimizer: adam
 num_epoch: 160
 lr_step: [80, 120]
 
-lr_extra: 0.0001
-optimizer_extra: adam
-lr_step_extra: [80, 120]
 
 # augmentation
 random_flip: true
