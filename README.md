@@ -10,9 +10,14 @@ Visible-Infrared Person Re-Identification (VI-ReID) seeks to match individuals a
 
 ## News
 
-- The code will be available soon.
+- The code is now available. There might be some little bugs. We will address them after graduation.
 
 ---
+
+## TODOs
+
+- release the model ckpt
+- release the test scripts.
 
 
 
